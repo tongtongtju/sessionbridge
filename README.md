@@ -44,7 +44,7 @@ ls ~/.codex/     # 检查 Codex 会话数据
 ## 安装
 
 ```bash
-git clone https://github.com/your-username/sessionbridge.git
+git clone https://github.com/tongtongtju/sessionbridge.git
 cd sessionbridge
 npm install
 ```
