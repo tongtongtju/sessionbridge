@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>sessionbridge — Bidirectional Session Migration between Codex & Claude Code</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #f5f4f0;
+    --bg-grid: #e8e7e3;
+    --fg: #1a1a1a;
+    --fg-muted: #6b6b6b;
+    --fg-light: #999;
+    --accent: #c2410c;
+    --accent-soft: rgba(194,65,12,0.08);
+    --accent2: #0369a1;
+    --accent2-soft: rgba(3,105,161,0.08);
+    --card: #ffffff;
+    --border: #dddcd8;
+    --code-bg: #fafaf8;
+    --serif: 'Instrument Serif', Georgia, serif;
+    --sans: 'Geist', -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', 'SF Mono', monospace;
+  }
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; font-size: 16px; -webkit-font-smoothing: antialiased; }
+
+  body {
+    font-family: var(--sans);
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  .grid-bg {
+    position: fixed; inset: 0; z-index: -1;
+    background-image:
+      linear-gradient(var(--bg-grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
+    background-size: 48px 48px;
+    opacity: 0.45;
+  }
+
+  /* ─── nav ─── */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    backdrop-filter: blur(16px) saturate(1.4);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    background: rgba(245,244,240,0.82);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner {
+    max-width: 1100px; margin: 0 auto; padding: 0 2rem;
+    height: 56px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .nav-logo {
+    font-family: var(--mono); font-size: 0.8rem; font-weight: 500;
+    letter-spacing: 0.06em; color: var(--fg); text-decoration: none;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .nav-logo .logo-icon {
+    width: 24px; height: 24px; border: 2px solid var(--fg); border-radius: 6px;
+    display: grid; place-items: center; font-size: 0.7rem; font-weight: 600;
+  }
+  .nav-links { display: flex; gap: 2rem; list-style: none; }
+  .nav-links a {
+    font-size: 0.78rem; font-weight: 500; color: var(--fg-muted); text-decoration: none;
+    letter-spacing: 0.04em; text-transform: uppercase; transition: color 0.2s; position: relative;
+  }
+  .nav-links a:hover, .nav-links a.active { color: var(--fg); }
+  .nav-links a.active::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: -4px;
+    height: 2px; background: var(--fg);
+  }
+  .nav-actions { display: flex; gap: 0.75rem; align-items: center; }
+  .nav-actions a {
+    color: var(--fg-muted); text-decoration: none; font-size: 0.78rem; font-weight: 500;
+    letter-spacing: 0.03em; padding: 0.35rem 0.75rem; border-radius: 6px;
+    border: 1px solid var(--border); transition: all 0.2s;
+  }
+  .nav-actions a:hover { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+
+  /* ─── main ─── */
+  main { max-width: 1100px; margin: 0 auto; padding: 0 2rem; }
+  section { padding: 5rem 0; }
+
+  /* ─── hero ─── */
+  .hero { padding: 7rem 0 4rem; text-align: center; }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    font-family: var(--mono); font-size: 0.68rem; font-weight: 500;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-muted);
+    border: 1px solid var(--border); border-radius: 100px;
+    padding: 0.4rem 1rem; margin-bottom: 2.5rem;
+    opacity: 0; animation: fadeUp 0.6s 0.1s forwards;
+  }
+  .hero-badge .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #22c55e; animation: pulse 2s infinite;
+  }
+
+  .hero h1 {
+    font-family: var(--serif); font-size: clamp(2.6rem, 5.5vw, 4.2rem);
+    font-weight: 400; line-height: 1.1; letter-spacing: -0.02em;
+    color: var(--fg); max-width: 720px; margin: 0 auto 1.2rem;
+    opacity: 0; animation: fadeUp 0.8s 0.2s forwards;
+  }
+  .hero h1 em { font-style: italic; }
+
+  .hero-direction {
+    display: inline-flex; align-items: center; gap: 0.8rem;
+    margin: 0 auto 1.2rem;
+    opacity: 0; animation: fadeUp 0.8s 0.28s forwards;
+  }
+  .hero-direction .tool {
+    font-family: var(--mono); font-size: 0.85rem; font-weight: 500;
+    padding: 0.3rem 0.8rem; border-radius: 6px;
+  }
+  .hero-direction .tool.codex { background: var(--accent-soft); color: var(--accent); }
+  .hero-direction .tool.claude { background: var(--accent2-soft); color: var(--accent2); }
+  .hero-direction .arrow { font-size: 1.2rem; color: var(--fg-light); }
+
+  .hero-sub {
+    font-size: 1.05rem; font-weight: 300; color: var(--fg-muted);
+    max-width: 540px; margin: 0 auto 3rem; line-height: 1.7;
+    opacity: 0; animation: fadeUp 0.8s 0.35s forwards;
+  }
+
+  /* ─── code block ─── */
+  .code-block-wrapper {
+    max-width: 640px; margin: 0 auto 2rem;
+    opacity: 0; animation: fadeUp 0.8s 0.5s forwards;
+  }
+  .code-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); }
+  .code-tab {
+    font-family: var(--mono); font-size: 0.68rem; font-weight: 500;
+    letter-spacing: 0.06em; padding: 0.55rem 1rem; background: none;
+    border: none; color: var(--fg-light); cursor: pointer;
+    transition: all 0.2s; text-transform: uppercase;
+  }
+  .code-tab.active { color: var(--fg); background: var(--card); box-shadow: 0 -1px 0 var(--fg); }
+  .code-tab:hover:not(.active) { color: var(--fg-muted); }
+  .code-block {
+    background: var(--card); border: 1px solid var(--border); border-top: none;
+    border-radius: 0 0 10px 10px; padding: 1.25rem 1.5rem; position: relative;
+  }
+  .code-block code {
+    font-family: var(--mono); font-size: 0.82rem; line-height: 1.8;
+    color: var(--fg); display: block; white-space: pre;
+  }
+  .code-block .comment { color: var(--fg-light); }
+  .code-block .cmd { color: var(--accent); font-weight: 500; }
+  .code-block .flag { color: var(--fg-muted); }
+  .copy-btn {
+    position: absolute; top: 0.75rem; right: 0.75rem;
+    font-family: var(--mono); font-size: 0.65rem; font-weight: 500;
+    letter-spacing: 0.06em; padding: 0.3rem 0.65rem; background: none;
+    border: 1px solid var(--border); border-radius: 5px;
+    color: var(--fg-light); cursor: pointer; text-transform: uppercase; transition: all 0.2s;
+  }
+  .copy-btn:hover { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+
+  .scroll-hint {
+    text-align: center; font-family: var(--mono); font-size: 0.7rem; color: var(--fg-light);
+    letter-spacing: 0.1em; opacity: 0; animation: fadeUp 0.6s 0.7s forwards;
+    display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+  }
+  .scroll-hint .arrow { display: inline-block; animation: bounce 2s infinite; }
+
+  /* ─── direction cards ─── */
+  .directions {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 4rem;
+  }
+  .direction-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 2.5rem; position: relative; transition: all 0.3s ease; overflow: hidden;
+  }
+  .direction-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    transform: scaleX(0); transform-origin: left; transition: transform 0.3s ease;
+  }
+  .direction-card:hover::before { transform: scaleX(1); }
+  .direction-card:hover { box-shadow: 0 8px 30px rgba(0,0,0,0.06); border-color: transparent; }
+  .direction-card.cx2cl::before { background: var(--accent); }
+  .direction-card.cl2cx::before { background: var(--accent2); }
+
+  .dir-label {
+    font-family: var(--mono); font-size: 0.65rem; font-weight: 500;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 0.25rem 0.6rem; border-radius: 4px; display: inline-block; margin-bottom: 1rem;
+  }
+  .dir-label.codex-label { color: var(--accent); background: var(--accent-soft); }
+  .dir-label.claude-label { color: var(--accent2); background: var(--accent2-soft); }
+
+  .direction-card h3 {
+    font-family: var(--serif); font-size: 1.6rem; font-weight: 400; margin-bottom: 0.6rem;
+  }
+  .direction-card p {
+    font-size: 0.9rem; font-weight: 300; color: var(--fg-muted); line-height: 1.7; margin-bottom: 1.5rem;
+  }
+  .dir-commands {
+    display: flex; flex-direction: column; gap: 0.5rem;
+  }
+  .dir-cmd {
+    font-family: var(--mono); font-size: 0.75rem; line-height: 1.7;
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 0.5rem 0.8rem;
+  }
+  .dir-cmd .comment { color: var(--fg-light); }
+  .dir-cmd .cmd { font-weight: 500; }
+
+  /* ─── section commons ─── */
+  .section-label {
+    font-family: var(--mono); font-size: 0.68rem; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-light); margin-bottom: 1rem;
+  }
+  .section-title {
+    font-family: var(--serif); font-size: clamp(2rem, 4vw, 3rem);
+    font-weight: 400; line-height: 1.15; letter-spacing: -0.02em; margin-bottom: 1rem;
+  }
+  .section-desc {
+    font-size: 1rem; font-weight: 300; color: var(--fg-muted);
+    max-width: 540px; line-height: 1.7; margin-bottom: 3rem;
+  }
+
+  /* ─── features ─── */
+  .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+  .feature-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 2rem; transition: all 0.3s ease; position: relative; overflow: hidden;
+  }
+  .feature-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--fg); transform: scaleX(0); transform-origin: left; transition: transform 0.3s ease;
+  }
+  .feature-card:hover::before { transform: scaleX(1); }
+  .feature-card:hover { box-shadow: 0 8px 30px rgba(0,0,0,0.06); border-color: transparent; }
+  .feature-icon { font-family: var(--mono); font-size: 1.5rem; margin-bottom: 1rem; display: block; }
+  .feature-card h3 { font-family: var(--sans); font-size: 0.92rem; font-weight: 600; margin-bottom: 0.5rem; }
+  .feature-card p { font-size: 0.85rem; font-weight: 300; color: var(--fg-muted); line-height: 1.65; }
+  .feature-card code {
+    font-family: var(--mono); font-size: 0.8em; background: var(--code-bg);
+    padding: 0.1em 0.3em; border-radius: 3px; border: 1px solid var(--border);
+  }
+
+  /* ─── how it works ─── */
+  .how-section { border-top: 1px solid var(--border); }
+  .steps { display: flex; flex-direction: column; }
+  .step {
+    display: grid; grid-template-columns: 80px 1fr; gap: 2rem;
+    padding: 2.5rem 0; border-bottom: 1px solid var(--border); align-items: start;
+    opacity: 0; transform: translateY(20px); transition: all 0.5s ease;
+  }
+  .step.visible { opacity: 1; transform: translateY(0); }
+  .step-number {
+    font-family: var(--serif); font-size: 3rem; font-weight: 400;
+    color: var(--border); line-height: 1; padding-top: 0.15rem;
+  }
+  .step-content h3 { font-family: var(--sans); font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; }
+  .step-content p {
+    font-size: 0.92rem; font-weight: 300; color: var(--fg-muted);
+    line-height: 1.7; max-width: 540px; margin-bottom: 1rem;
+  }
+  .step-code {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1rem 1.25rem; font-family: var(--mono); font-size: 0.78rem; line-height: 1.8;
+    color: var(--fg); max-width: 580px; overflow-x: auto;
+  }
+  .step-code .comment { color: var(--fg-light); }
+  .step-code .cmd { color: var(--accent); }
+
+  /* ─── architecture ─── */
+  .arch-diagram {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 2.5rem; margin-top: 2rem; font-family: var(--mono); font-size: 0.72rem;
+    line-height: 1.9; color: var(--fg-muted); overflow-x: auto; white-space: pre; position: relative;
+  }
+  .arch-diagram .hl { color: var(--accent); font-weight: 500; }
+  .arch-diagram .hl2 { color: var(--accent2); font-weight: 500; }
+  .arch-diagram .lb { color: var(--fg); }
+
+  /* ─── faq ─── */
+  .faq-section { border-top: 1px solid var(--border); }
+  .faq-list { max-width: 680px; }
+  .faq-item { border-bottom: 1px solid var(--border); padding: 1.5rem 0; }
+  .faq-item details summary {
+    font-size: 0.95rem; font-weight: 500; cursor: pointer; list-style: none;
+    display: flex; justify-content: space-between; align-items: center; user-select: none;
+  }
+  .faq-item details summary::-webkit-details-marker { display: none; }
+  .faq-item details summary::after {
+    content: '+'; font-family: var(--mono); font-size: 1.2rem; color: var(--fg-light); transition: transform 0.2s;
+  }
+  .faq-item details[open] summary::after { transform: rotate(45deg); }
+  .faq-item details .faq-answer {
+    margin-top: 1rem; font-size: 0.88rem; font-weight: 300; color: var(--fg-muted); line-height: 1.7;
+  }
+  .faq-item details .faq-answer code {
+    font-family: var(--mono); font-size: 0.8em; background: var(--code-bg);
+    border: 1px solid var(--border); padding: 0.15rem 0.4rem; border-radius: 4px;
+  }
+
+  /* ─── footer ─── */
+  footer { border-top: 1px solid var(--border); padding: 2.5rem 0; margin-top: 3rem; }
+  .footer-inner {
+    max-width: 1100px; margin: 0 auto; padding: 0 2rem;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .footer-left { font-family: var(--mono); font-size: 0.72rem; color: var(--fg-light); letter-spacing: 0.04em; }
+  .footer-right { display: flex; gap: 1.5rem; }
+  .footer-right a {
+    font-family: var(--mono); font-size: 0.72rem; color: var(--fg-muted);
+    text-decoration: none; letter-spacing: 0.04em; transition: color 0.2s;
+  }
+  .footer-right a:hover { color: var(--fg); }
+
+  /* ─── animations ─── */
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+
+  .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.7s ease, transform 0.7s ease; }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+
+  @media (max-width: 768px) {
+    .features-grid, .directions { grid-template-columns: 1fr; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 2.2rem; }
+    .step { grid-template-columns: 1fr; }
+    .step-number { font-size: 2rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<!-- ─── nav ─── -->
+<nav>
+  <div class="nav-inner">
+    <a href="#" class="nav-logo">
+      <span class="logo-icon">⇄</span>
+      sessionbridge
+    </a>
+    <ul class="nav-links">
+      <li><a href="#directions" class="active">Directions</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how-it-works">How It Works</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#faq">FAQ</a></li>
+    </ul>
+    <div class="nav-actions">
+      <a href="https://github.com/your-username/sessionbridge" target="_blank">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ─── hero ─── -->
+<main>
+  <section class="hero">
+    <div class="hero-badge">
+      <span class="dot"></span>
+      Claude Code Plugin
+    </div>
+
+    <div class="hero-direction">
+      <span class="tool codex">Codex CLI</span>
+      <span class="arrow">↔</span>
+      <span class="tool claude">Claude Code</span>
+    </div>
+
+    <h1>Your sessions,<br><em>bridged</em></h1>
+    <p class="hero-sub">
+      Bidirectional session migration between OpenAI Codex CLI and Claude Code.
+      Preserve conversations, tool calls, and file changes — in either direction.
+    </p>
+
+    <div class="code-block-wrapper">
+      <div class="code-tabs">
+        <button class="code-tab active" onclick="switchTab(this, 'tab-install')">Install</button>
+        <button class="code-tab" onclick="switchTab(this, 'tab-cx2cl')">Codex → Claude</button>
+        <button class="code-tab" onclick="switchTab(this, 'tab-cl2cx')">Claude → Codex</button>
+      </div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <code id="tab-install"><span class="cmd">git</span> clone https://github.com/your-username/sessionbridge.git
+<span class="cmd">cd</span> sessionbridge <span class="flag">&&</span> <span class="cmd">npm</span> install
+
+<span class="comment"># Load plugin in your project</span>
+<span class="cmd">cd</span> /your/project
+<span class="cmd">claude</span> <span class="flag">--plugin-dir</span> /path/to/sessionbridge</code>
+        <code id="tab-cx2cl" style="display:none"><span class="comment"># Codex → Claude Code</span>
+
+<span class="comment"># List available Codex sessions</span>
+/sessionbridge:import-session <span class="cmd">cx2cl</span> --list
+
+<span class="comment"># Inject context into current session (default)</span>
+/sessionbridge:import-session <span class="cmd">cx2cl</span> <span class="flag">&lt;codex-session-id&gt;</span>
+
+<span class="comment"># Create new Claude session file</span>
+/sessionbridge:import-session <span class="cmd">cx2cl</span> <span class="flag">&lt;codex-session-id&gt;</span> --new-session</code>
+        <code id="tab-cl2cx" style="display:none"><span class="comment"># Claude Code → Codex</span>
+
+<span class="comment"># List available Claude sessions</span>
+/sessionbridge:import-session <span class="cmd">cl2cx</span> --list
+
+<span class="comment"># Create new Codex session file (default)</span>
+/sessionbridge:import-session <span class="cmd">cl2cx</span> <span class="flag">&lt;claude-session-id&gt;</span>
+
+<span class="comment"># Inject context into current conversation</span>
+/sessionbridge:import-session <span class="cmd">cl2cx</span> <span class="flag">&lt;claude-session-id&gt;</span> --inject</code>
+      </div>
+    </div>
+
+    <div class="scroll-hint">
+      <span>$ scroll to explore</span>
+      <span class="arrow">↓</span>
+    </div>
+  </section>
+
+  <!-- ─── directions ─── -->
+  <section id="directions">
+    <div class="reveal">
+      <p class="section-label">// Two directions</p>
+      <h2 class="section-title">One plugin,<br>both ways</h2>
+      <p class="section-desc">
+        Whether you're moving from Codex to Claude Code or vice versa, sessionbridge handles the format conversion automatically.
+      </p>
+    </div>
+
+    <div class="directions">
+      <div class="direction-card cx2cl reveal">
+        <span class="dir-label codex-label">cx2cl — codex to claude</span>
+        <h3>Codex → Claude Code</h3>
+        <p>
+          Continue your Codex development in Claude Code. Injects context into the current
+          conversation or creates a full JSONL session file with DAG chains and tool call mapping.
+        </p>
+        <div class="dir-commands">
+          <div class="dir-cmd"><span class="comment"># Inject into current session</span>
+/sessionbridge:import-session <span class="cmd">cx2cl</span> 019e733c...</div>
+          <div class="dir-cmd"><span class="comment"># Create new session file</span>
+/sessionbridge:import-session <span class="cmd">cx2cl</span> 019e733c... --new-session</div>
+        </div>
+      </div>
+      <div class="direction-card cl2cx reveal">
+        <span class="dir-label claude-label">cl2cx — claude to codex</span>
+        <h3>Claude Code → Codex</h3>
+        <p>
+          Export your Claude Code session to Codex format. Generates proper Codex JSONL with
+          session_meta, turn_context, event_msg, and registers in the SQLite index.
+        </p>
+        <div class="dir-commands">
+          <div class="dir-cmd"><span class="comment"># Create new Codex session</span>
+/sessionbridge:import-session <span class="cmd">cl2cx</span> 513fbe94...</div>
+          <div class="dir-cmd"><span class="comment"># Inject summary into current conversation</span>
+/sessionbridge:import-session <span class="cmd">cl2cx</span> 513fbe94... --inject</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── features ─── -->
+  <section id="features">
+    <div class="reveal">
+      <p class="section-label">// Features</p>
+      <h2 class="section-title">Built for<br>real workflows</h2>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card reveal">
+        <span class="feature-icon">⇄</span>
+        <h3>Bidirectional</h3>
+        <p>Full support for both Codex→Claude and Claude→Codex migration with a single plugin.</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon">→</span>
+        <h3>Context Injection</h3>
+        <p>Inject session context into your current conversation. No restart needed — just keep chatting.</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon">◆</span>
+        <h3>Session Files</h3>
+        <p>Generate complete session files with proper DAG chains, UUID re-keying, and format conversion.</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon">⌗</span>
+        <h3>Tool Call Mapping</h3>
+        <p>Automatically maps tool names between formats: <code>exec_command ↔ Bash</code>, <code>apply_patch ↔ Edit</code>.</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon">↕</span>
+        <h3>Streaming Parser</h3>
+        <p>Line-by-line JSONL parsing. Handles sessions with thousands of turns without memory issues.</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon">⊘</span>
+        <h3>Read-Only & Safe</h3>
+        <p>Never modifies or deletes your original session data. Only reads source and writes to target.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── how it works ─── -->
+  <section id="how-it-works" class="how-section">
+    <div class="reveal">
+      <p class="section-label">// How it works</p>
+      <h2 class="section-title">Three steps,<br>either direction</h2>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <span class="step-number">01</span>
+        <div class="step-content">
+          <h3>Load the plugin</h3>
+          <p>Start Claude Code in your project directory with the plugin loaded.</p>
+          <div class="step-code"><span class="cmd">cd</span> /path/to/your-project
+<span class="cmd">claude</span> <span class="flag">--plugin-dir</span> /path/to/sessionbridge</div>
+        </div>
+      </div>
+      <div class="step">
+        <span class="step-number">02</span>
+        <div class="step-content">
+          <h3>Find your session</h3>
+          <p>List sessions from either tool. The plugin queries SQLite databases and scans filesystem.</p>
+          <div class="step-code"><span class="comment"># List Codex sessions</span>
+/sessionbridge:import-session <span class="cmd">cx2cl</span> --list
+
+<span class="comment"># List Claude sessions</span>
+/sessionbridge:import-session <span class="cmd">cl2cx</span> --list</div>
+        </div>
+      </div>
+      <div class="step">
+        <span class="step-number">03</span>
+        <div class="step-content">
+          <h3>Migrate and continue</h3>
+          <p>Pass the session ID. Choose inject mode (default for cx2cl) or file creation mode.</p>
+          <div class="step-code"><span class="comment"># Codex → Claude (inject into current session)</span>
+/sessionbridge:import-session <span class="cmd">cx2cl</span> 019e733c...
+
+<span class="comment"># Claude → Codex (create new session)</span>
+/sessionbridge:import-session <span class="cmd">cl2cx</span> 513fbe94...</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── architecture ─── -->
+  <section id="architecture">
+    <div class="reveal">
+      <p class="section-label">// Architecture</p>
+      <h2 class="section-title">Under the hood</h2>
+      <p class="section-desc">
+        How sessionbridge converts between two entirely different session formats — Codex's SQLite-indexed JSONL
+        and Claude Code's DAG-linked conversation records.
+      </p>
+    </div>
+    <div class="arch-diagram reveal">
+<span class="hl">┌────────────────────────────────────────────────────────────────────────────┐</span>
+<span class="hl">│</span>                          <span class="lb">sessionbridge</span>                                 <span class="hl">│</span>
+<span class="hl">│</span>                                                                            <span class="hl">│</span>
+<span class="hl">│</span>  <span class="lb">Direction 1: cx2cl (Codex → Claude)</span>                                       <span class="hl">│</span>
+<span class="hl">│</span>                                                                            <span class="hl">│</span>
+<span class="hl">│</span>   <span class="hl">codex-parser</span> ──parse──→ <span class="lb">ParsedSession</span> ──write──→ <span class="hl2">claude-writer</span>             <span class="hl">│</span>
+<span class="hl">│</span>       │                       (IR)                      │                  <span class="hl">│</span>
+<span class="hl">│</span>       ▼                                                 ▼                  <span class="hl">│</span>
+<span class="hl">│</span>   Codex JSONL           context-builder         Claude JSONL               <span class="hl">│</span>
+<span class="hl">│</span>                          (inject mode)          + DAG chains              <span class="hl">│</span>
+<span class="hl">│</span>                                                                            <span class="hl">│</span>
+<span class="hl">│</span>  <span class="hl2">Direction 2: cl2cx (Claude → Codex)</span>                                      <span class="hl">│</span>
+<span class="hl">│</span>                                                                            <span class="hl">│</span>
+<span class="hl">│</span>   <span class="hl2">claude-reader</span> ──parse──→ <span class="lb">ParsedSession</span> ──write──→ <span class="hl">codex-writer</span>             <span class="hl">│</span>
+<span class="hl">│</span>       │                       (IR)                      │                  <span class="hl">│</span>
+<span class="hl">│</span>       ▼                                                 ▼                  <span class="hl">│</span>
+<span class="hl">│</span>   Claude JSONL          context-builder         Codex JSONL               <span class="hl">│</span>
+<span class="hl">│</span>   + tool_use pairs       (--inject)             + SQLite index            <span class="hl">│</span>
+<span class="hl">└────────────────────────────────────────────────────────────────────────────┘</span>
+    </div>
+
+    <div class="features-grid reveal" style="margin-top:2rem; grid-template-columns: repeat(2, 1fr);">
+      <div class="feature-card">
+        <span class="feature-icon" style="color:var(--accent)">⊞</span>
+        <h3>Codex Format</h3>
+        <p>
+          JSONL indexed by SQLite. Records: <code>session_meta</code>, <code>turn_context</code>,
+          <code>event_msg</code>, <code>response_item</code>. UUID v7 session IDs.
+          Tools: <code>exec_command</code>, <code>apply_patch</code>.
+        </p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon" style="color:var(--accent2)">⊡</span>
+        <h3>Claude Code Format</h3>
+        <p>
+          JSONL with DAG-linked records (<code>uuid</code> + <code>parentUuid</code>). Types:
+          <code>user</code>, <code>assistant</code>, <code>tool_result</code>. UUID v4 session IDs.
+          Tools: <code>Bash</code>, <code>Edit</code>, <code>Read</code>.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── faq ─── -->
+  <section id="faq" class="faq-section">
+    <div class="reveal">
+      <p class="section-label">// FAQ</p>
+      <h2 class="section-title">Common questions</h2>
+    </div>
+    <div class="faq-list reveal">
+      <div class="faq-item"><details>
+        <summary>Where does session data live?</summary>
+        <div class="faq-answer">
+          <strong>Codex:</strong> <code>~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl</code> indexed by <code>~/.codex/state_5.sqlite</code>.<br>
+          <strong>Claude Code:</strong> <code>~/.claude/projects/&lt;slug&gt;/&lt;uuid&gt;.jsonl</code> (pure file, no SQLite).
+        </div>
+      </details></div>
+      <div class="faq-item"><details>
+        <summary>Will it modify my original sessions?</summary>
+        <div class="faq-answer">No. All operations are strictly read-only on source data. Converted files are written to the target directory.</div>
+      </details></div>
+      <div class="faq-item"><details>
+        <summary>What data is preserved vs. lost?</summary>
+        <div class="faq-answer">
+          <strong>Preserved:</strong> User messages, assistant replies, tool calls and results, file changes, timestamps, git branch.<br>
+          <strong>Lost:</strong> Encrypted reasoning content, web search results, sub-agent structures, hook progress records.
+        </div>
+      </details></div>
+      <div class="faq-item"><details>
+        <summary>Do I need both Codex and Claude Code installed?</summary>
+        <div class="faq-answer">You only need Claude Code to run the plugin. Codex sessions are read directly from disk — you don't need Codex CLI installed or running.</div>
+      </details></div>
+      <div class="faq-item"><details>
+        <summary>Inject mode or new session — which should I use?</summary>
+        <div class="faq-answer">
+          <strong>Inject</strong> for quick context handoff in your current conversation.<br>
+          <strong>New session</strong> for a fully independent, resumable session with complete history.
+        </div>
+      </details></div>
+    </div>
+  </section>
+</main>
+
+<!-- ─── footer ─── -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-left">sessionbridge v1.0.0 — MIT License</div>
+    <div class="footer-right">
+      <a href="https://github.com/your-username/sessionbridge">GitHub</a>
+      <a href="#directions">Directions</a>
+      <a href="#architecture">Architecture</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+function switchTab(btn, id) {
+  const w = btn.closest('.code-block-wrapper');
+  w.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  w.querySelectorAll('code[id^="tab-"]').forEach(c => c.style.display = 'none');
+  document.getElementById(id).style.display = 'block';
+}
+function copyCode(btn) {
+  const b = btn.closest('.code-block');
+  const v = b.querySelector('code[id^="tab-"]:not([style*="display: none"])') || b.querySelector('code[id^="tab-"]');
+  navigator.clipboard.writeText(v.textContent).then(() => { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 1500); });
+}
+const obs = new IntersectionObserver(e => e.forEach(el => { if (el.isIntersecting) el.target.classList.add('visible'); }), { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+document.querySelectorAll('.reveal, .step').forEach(el => obs.observe(el));
+const secs = document.querySelectorAll('section[id]');
+window.addEventListener('scroll', () => {
+  let c = ''; secs.forEach(s => { if (scrollY >= s.offsetTop - 200) c = s.id; });
+  document.querySelectorAll('.nav-links a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + c));
+});
+</script>
+</body>
+</html>

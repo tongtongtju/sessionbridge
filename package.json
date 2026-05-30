@@ -1,0 +1,21 @@
+{
+  "name": "sessionbridge",
+  "version": "1.0.0",
+  "description": "Bidirectional session migration between OpenAI Codex CLI and Claude Code",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx src/index.ts",
+    "import": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.9.1",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/uuid": "^10.0.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
