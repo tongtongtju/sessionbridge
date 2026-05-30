@@ -73,6 +73,9 @@ ls ~/.codex/     # 检查 Codex 会话数据
 
 # 安装插件
 /plugin install sessionbridge@sessionbridge
+
+# 激活插件
+/reload-plugins
 ```
 
 安装后即可在任何项目中使用 `/sessionbridge:import-session` 命令。
