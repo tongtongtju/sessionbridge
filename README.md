@@ -63,6 +63,22 @@ ls ~/.codex/     # 检查 Codex 会话数据
 
 ## 安装
 
+### 方式一：Claude Code 插件市场（推荐）
+
+在 Claude Code 中执行：
+
+```bash
+# 添加插件市场源
+/plugin marketplace add tongtongtju/sessionbridge
+
+# 安装插件
+/plugin install sessionbridge@sessionbridge
+```
+
+安装后即可在任何项目中使用 `/sessionbridge:import-session` 命令。
+
+### 方式二：手动安装
+
 ```bash
 git clone https://github.com/tongtongtju/sessionbridge.git
 cd sessionbridge
@@ -75,6 +91,9 @@ npm install
 
 ### 1. 加载插件
 
+**插件市场安装的用户：** 已自动加载，跳过此步。
+
+**手动安装的用户：**
 ```bash
 cd /path/to/your-project
 claude --plugin-dir /path/to/sessionbridge
