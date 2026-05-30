@@ -3,34 +3,46 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>sessionbridge — Bidirectional Session Migration between Codex & Claude Code</title>
+<title>sessionbridge — Codex CLI ↔ Claude Code Session Migration</title>
+<meta name="description" content="Bidirectional session migration between OpenAI Codex CLI and Claude Code. Preserve conversations, tool calls, and file changes.">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@400;500;600&family=Geist:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
 <style>
   :root {
-    --bg: #f5f4f0;
-    --bg-grid: #e8e7e3;
-    --fg: #1a1a1a;
-    --fg-muted: #6b6b6b;
-    --fg-light: #999;
+    --bg: #faf9f6;
+    --bg-deep: #f0eeea;
+    --fg: #1a1917;
+    --fg-muted: #6d6b63;
+    --fg-light: #a3a199;
     --accent: #c2410c;
-    --accent-soft: rgba(194,65,12,0.08);
-    --accent2: #0369a1;
-    --accent2-soft: rgba(3,105,161,0.08);
+    --accent-soft: rgba(194,65,12,0.07);
+    --accent-hover: #9a3412;
+    --accent2: #0e7490;
+    --accent2-soft: rgba(14,116,144,0.07);
+    --accent2-hover: #155e75;
     --card: #ffffff;
-    --border: #dddcd8;
-    --code-bg: #fafaf8;
-    --serif: 'Instrument Serif', Georgia, serif;
-    --sans: 'Geist', -apple-system, sans-serif;
-    --mono: 'JetBrains Mono', 'SF Mono', monospace;
+    --card-hover: #fefefe;
+    --border: #e4e2dc;
+    --border-light: #eeedea;
+    --code-bg: #f8f7f4;
+    --shadow-sm: 0 1px 3px rgba(26,25,23,0.04);
+    --shadow-md: 0 4px 20px rgba(26,25,23,0.06);
+    --shadow-lg: 0 12px 40px rgba(26,25,23,0.08);
+    --serif: 'EB Garamond', Georgia, serif;
+    --sans: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --radius-xs: 5px;
+    --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-  html { scroll-behavior: smooth; font-size: 16px; -webkit-font-smoothing: antialiased; }
+  html { scroll-behavior: smooth; font-size: 16px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 
   body {
     font-family: var(--sans);
@@ -40,301 +52,491 @@
     overflow-x: hidden;
   }
 
+  /* ─── grid background ─── */
   .grid-bg {
-    position: fixed; inset: 0; z-index: -1;
+    position: fixed; inset: 0; z-index: -2;
     background-image:
-      linear-gradient(var(--bg-grid) 1px, transparent 1px),
-      linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
-    background-size: 48px 48px;
-    opacity: 0.45;
+      linear-gradient(var(--border-light) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border-light) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
+  .grid-bg::after {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, var(--bg) 0%, transparent 70%);
   }
 
   /* ─── nav ─── */
   nav {
     position: sticky; top: 0; z-index: 100;
-    backdrop-filter: blur(16px) saturate(1.4);
-    -webkit-backdrop-filter: blur(16px) saturate(1.4);
-    background: rgba(245,244,240,0.82);
-    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(20px) saturate(1.6);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+    background: rgba(250,249,246,0.78);
+    border-bottom: 1px solid var(--border-light);
+    transition: box-shadow var(--transition);
   }
+  nav.scrolled { box-shadow: 0 1px 12px rgba(26,25,23,0.06); }
   .nav-inner {
-    max-width: 1100px; margin: 0 auto; padding: 0 2rem;
-    height: 56px; display: flex; align-items: center; justify-content: space-between;
+    max-width: 1120px; margin: 0 auto; padding: 0 2rem;
+    height: 58px; display: flex; align-items: center; justify-content: space-between;
   }
   .nav-logo {
-    font-family: var(--mono); font-size: 0.8rem; font-weight: 500;
-    letter-spacing: 0.06em; color: var(--fg); text-decoration: none;
-    display: flex; align-items: center; gap: 0.5rem;
+    font-family: var(--mono); font-size: 0.82rem; font-weight: 600;
+    letter-spacing: 0.03em; color: var(--fg); text-decoration: none;
+    display: flex; align-items: center; gap: 0.6rem;
+    transition: opacity var(--transition);
   }
+  .nav-logo:hover { opacity: 0.7; }
   .nav-logo .logo-icon {
-    width: 24px; height: 24px; border: 2px solid var(--fg); border-radius: 6px;
-    display: grid; place-items: center; font-size: 0.7rem; font-weight: 600;
+    width: 28px; height: 28px; border: 1.5px solid var(--fg); border-radius: 7px;
+    display: grid; place-items: center; font-size: 0.85rem; font-weight: 400;
+    transition: all var(--transition);
   }
-  .nav-links { display: flex; gap: 2rem; list-style: none; }
+  .nav-logo:hover .logo-icon { background: var(--fg); color: var(--bg); }
+  .nav-links { display: flex; gap: 2.2rem; list-style: none; }
   .nav-links a {
-    font-size: 0.78rem; font-weight: 500; color: var(--fg-muted); text-decoration: none;
-    letter-spacing: 0.04em; text-transform: uppercase; transition: color 0.2s; position: relative;
+    font-size: 0.76rem; font-weight: 500; color: var(--fg-light); text-decoration: none;
+    letter-spacing: 0.04em; text-transform: uppercase; transition: color var(--transition);
+    position: relative; padding: 0.2rem 0;
   }
-  .nav-links a:hover, .nav-links a.active { color: var(--fg); }
-  .nav-links a.active::after {
-    content: ''; position: absolute; left: 0; right: 0; bottom: -4px;
-    height: 2px; background: var(--fg);
+  .nav-links a::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: -2px;
+    height: 1.5px; background: var(--fg); transform: scaleX(0);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  .nav-actions { display: flex; gap: 0.75rem; align-items: center; }
-  .nav-actions a {
-    color: var(--fg-muted); text-decoration: none; font-size: 0.78rem; font-weight: 500;
-    letter-spacing: 0.03em; padding: 0.35rem 0.75rem; border-radius: 6px;
-    border: 1px solid var(--border); transition: all 0.2s;
+  .nav-links a:hover { color: var(--fg); }
+  .nav-links a.active { color: var(--fg); }
+  .nav-links a.active::after { transform: scaleX(1); }
+  .nav-cta {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    font-family: var(--mono); font-size: 0.72rem; font-weight: 500;
+    color: var(--fg); text-decoration: none; letter-spacing: 0.02em;
+    padding: 0.4rem 0.9rem; border-radius: var(--radius-xs);
+    border: 1px solid var(--fg); transition: all var(--transition);
   }
-  .nav-actions a:hover { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .nav-cta:hover { background: var(--fg); color: var(--bg); }
+  .nav-cta svg { width: 14px; height: 14px; fill: currentColor; }
 
   /* ─── main ─── */
-  main { max-width: 1100px; margin: 0 auto; padding: 0 2rem; }
-  section { padding: 5rem 0; }
+  main { max-width: 1120px; margin: 0 auto; padding: 0 2rem; }
+  section { padding: 5.5rem 0; }
 
   /* ─── hero ─── */
-  .hero { padding: 7rem 0 4rem; text-align: center; }
+  .hero { padding: 8rem 0 4.5rem; text-align: center; position: relative; }
+
   .hero-badge {
     display: inline-flex; align-items: center; gap: 0.5rem;
-    font-family: var(--mono); font-size: 0.68rem; font-weight: 500;
-    letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-muted);
+    font-family: var(--mono); font-size: 0.65rem; font-weight: 500;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-muted);
     border: 1px solid var(--border); border-radius: 100px;
-    padding: 0.4rem 1rem; margin-bottom: 2.5rem;
-    opacity: 0; animation: fadeUp 0.6s 0.1s forwards;
+    padding: 0.4rem 1.1rem; margin-bottom: 2.5rem;
+    opacity: 0; animation: fadeUp 0.7s 0.1s forwards;
   }
   .hero-badge .dot {
-    width: 6px; height: 6px; border-radius: 50%; background: #22c55e; animation: pulse 2s infinite;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #16a34a; animation: pulse 2.5s ease-in-out infinite;
   }
 
   .hero h1 {
-    font-family: var(--serif); font-size: clamp(2.6rem, 5.5vw, 4.2rem);
-    font-weight: 400; line-height: 1.1; letter-spacing: -0.02em;
-    color: var(--fg); max-width: 720px; margin: 0 auto 1.2rem;
+    font-family: var(--serif); font-size: clamp(2.8rem, 6vw, 4.5rem);
+    font-weight: 400; line-height: 1.08; letter-spacing: -0.025em;
+    color: var(--fg); max-width: 680px; margin: 0 auto 1.4rem;
     opacity: 0; animation: fadeUp 0.8s 0.2s forwards;
   }
-  .hero h1 em { font-style: italic; }
+  .hero h1 em { font-style: italic; color: var(--accent); }
 
   .hero-direction {
-    display: inline-flex; align-items: center; gap: 0.8rem;
-    margin: 0 auto 1.2rem;
-    opacity: 0; animation: fadeUp 0.8s 0.28s forwards;
+    display: inline-flex; align-items: center; gap: 0.7rem;
+    margin: 0 auto 1rem;
+    opacity: 0; animation: fadeUp 0.8s 0.15s forwards;
   }
   .hero-direction .tool {
-    font-family: var(--mono); font-size: 0.85rem; font-weight: 500;
-    padding: 0.3rem 0.8rem; border-radius: 6px;
+    font-family: var(--mono); font-size: 0.8rem; font-weight: 500;
+    padding: 0.28rem 0.75rem; border-radius: var(--radius-xs);
+    letter-spacing: 0.02em;
   }
   .hero-direction .tool.codex { background: var(--accent-soft); color: var(--accent); }
   .hero-direction .tool.claude { background: var(--accent2-soft); color: var(--accent2); }
-  .hero-direction .arrow { font-size: 1.2rem; color: var(--fg-light); }
+  .hero-direction .bridge {
+    width: 28px; height: 1px; background: var(--border);
+    position: relative; display: flex; align-items: center; justify-content: center;
+  }
+  .hero-direction .bridge::after {
+    content: ''; position: absolute;
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--fg-light);
+    animation: bridgePulse 2s ease-in-out infinite;
+  }
 
   .hero-sub {
     font-size: 1.05rem; font-weight: 300; color: var(--fg-muted);
-    max-width: 540px; margin: 0 auto 3rem; line-height: 1.7;
+    max-width: 520px; margin: 0 auto 3rem; line-height: 1.75;
     opacity: 0; animation: fadeUp 0.8s 0.35s forwards;
   }
 
-  /* ─── code block ─── */
+  .hero-cta-row {
+    display: flex; align-items: center; justify-content: center; gap: 1rem;
+    margin-bottom: 3rem;
+    opacity: 0; animation: fadeUp 0.8s 0.45s forwards;
+  }
+  .hero-cta-primary {
+    display: inline-flex; align-items: center; gap: 0.55rem;
+    font-family: var(--mono); font-size: 0.78rem; font-weight: 500;
+    color: var(--bg); background: var(--fg);
+    text-decoration: none; letter-spacing: 0.02em;
+    padding: 0.65rem 1.4rem; border-radius: var(--radius-sm);
+    transition: all var(--transition);
+  }
+  .hero-cta-primary:hover { background: var(--accent); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+  .hero-cta-primary svg { width: 15px; height: 15px; fill: currentColor; }
+  .hero-cta-secondary {
+    font-family: var(--mono); font-size: 0.72rem; font-weight: 500;
+    color: var(--fg-muted); text-decoration: none; letter-spacing: 0.02em;
+    padding: 0.65rem 1.2rem; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    transition: all var(--transition);
+  }
+  .hero-cta-secondary:hover { border-color: var(--fg); color: var(--fg); }
+
+  /* ─── quick install ─── */
+  .quick-install {
+    max-width: 580px; margin: 0 auto 2rem;
+    opacity: 0; animation: fadeUp 0.8s 0.55s forwards;
+  }
+  .quick-install-label {
+    font-family: var(--mono); font-size: 0.6rem; font-weight: 500;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-light);
+    margin-bottom: 0.5rem;
+  }
+  .quick-install-box {
+    background: var(--fg); border-radius: var(--radius-sm);
+    padding: 0.85rem 1.2rem; display: flex; align-items: center;
+    justify-content: space-between; gap: 1rem;
+    box-shadow: var(--shadow-md);
+  }
+  .quick-install-box code {
+    font-family: var(--mono); font-size: 0.78rem; color: #e4e2dc;
+    line-height: 1.6; flex: 1; white-space: nowrap; overflow-x: auto;
+  }
+  .quick-install-box code .dollar { color: var(--fg-light); }
+  .quick-install-box code .cmd { color: #e2e8f0; }
+  .quick-install-box code .url { color: var(--accent); }
+  .install-copy {
+    font-family: var(--mono); font-size: 0.62rem; font-weight: 500;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 0.3rem 0.6rem; background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.15); border-radius: var(--radius-xs);
+    color: rgba(255,255,255,0.6); cursor: pointer; transition: all var(--transition);
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .install-copy:hover { background: rgba(255,255,255,0.2); color: rgba(255,255,255,0.9); }
+
+  .scroll-hint {
+    text-align: center; font-family: var(--mono); font-size: 0.65rem;
+    color: var(--fg-light); letter-spacing: 0.1em;
+    opacity: 0; animation: fadeUp 0.6s 0.8s forwards;
+    display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
+    padding-top: 1rem;
+  }
+  .scroll-hint .arrow { display: inline-block; animation: bounce 2.5s ease-in-out infinite; }
+
+  /* ─── code block tabs ─── */
   .code-block-wrapper {
-    max-width: 640px; margin: 0 auto 2rem;
+    max-width: 640px; margin: 0 auto 2.5rem;
     opacity: 0; animation: fadeUp 0.8s 0.5s forwards;
   }
-  .code-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); }
+  .code-tabs { display: flex; gap: 0; }
   .code-tab {
-    font-family: var(--mono); font-size: 0.68rem; font-weight: 500;
-    letter-spacing: 0.06em; padding: 0.55rem 1rem; background: none;
-    border: none; color: var(--fg-light); cursor: pointer;
-    transition: all 0.2s; text-transform: uppercase;
+    font-family: var(--mono); font-size: 0.65rem; font-weight: 500;
+    letter-spacing: 0.06em; padding: 0.6rem 1.1rem; background: none;
+    border: 1px solid transparent; border-bottom: none; color: var(--fg-light);
+    cursor: pointer; transition: all var(--transition); text-transform: uppercase;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   }
-  .code-tab.active { color: var(--fg); background: var(--card); box-shadow: 0 -1px 0 var(--fg); }
+  .code-tab.active {
+    color: var(--fg); background: var(--card);
+    border-color: var(--border);
+    box-shadow: 0 -2px 0 var(--fg);
+  }
   .code-tab:hover:not(.active) { color: var(--fg-muted); }
   .code-block {
     background: var(--card); border: 1px solid var(--border); border-top: none;
-    border-radius: 0 0 10px 10px; padding: 1.25rem 1.5rem; position: relative;
+    border-radius: 0 0 var(--radius) var(--radius);
+    padding: 1.4rem 1.6rem; position: relative;
   }
   .code-block code {
-    font-family: var(--mono); font-size: 0.82rem; line-height: 1.8;
+    font-family: var(--mono); font-size: 0.8rem; line-height: 1.85;
     color: var(--fg); display: block; white-space: pre;
   }
   .code-block .comment { color: var(--fg-light); }
   .code-block .cmd { color: var(--accent); font-weight: 500; }
   .code-block .flag { color: var(--fg-muted); }
   .copy-btn {
-    position: absolute; top: 0.75rem; right: 0.75rem;
-    font-family: var(--mono); font-size: 0.65rem; font-weight: 500;
-    letter-spacing: 0.06em; padding: 0.3rem 0.65rem; background: none;
-    border: 1px solid var(--border); border-radius: 5px;
-    color: var(--fg-light); cursor: pointer; text-transform: uppercase; transition: all 0.2s;
+    position: absolute; top: 0.85rem; right: 0.85rem;
+    font-family: var(--mono); font-size: 0.6rem; font-weight: 500;
+    letter-spacing: 0.08em; padding: 0.3rem 0.7rem; background: none;
+    border: 1px solid var(--border); border-radius: var(--radius-xs);
+    color: var(--fg-light); cursor: pointer; text-transform: uppercase;
+    transition: all var(--transition);
   }
   .copy-btn:hover { background: var(--fg); color: var(--bg); border-color: var(--fg); }
 
-  .scroll-hint {
-    text-align: center; font-family: var(--mono); font-size: 0.7rem; color: var(--fg-light);
-    letter-spacing: 0.1em; opacity: 0; animation: fadeUp 0.6s 0.7s forwards;
-    display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
-  }
-  .scroll-hint .arrow { display: inline-block; animation: bounce 2s infinite; }
-
   /* ─── direction cards ─── */
   .directions {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 4rem;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 3rem;
   }
   .direction-card {
-    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
-    padding: 2.5rem; position: relative; transition: all 0.3s ease; overflow: hidden;
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 2.5rem; position: relative; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
   }
   .direction-card::before {
     content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-    transform: scaleX(0); transform-origin: left; transition: transform 0.3s ease;
+    transform: scaleX(0); transform-origin: left;
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .direction-card:hover::before { transform: scaleX(1); }
-  .direction-card:hover { box-shadow: 0 8px 30px rgba(0,0,0,0.06); border-color: transparent; }
-  .direction-card.cx2cl::before { background: var(--accent); }
-  .direction-card.cl2cx::before { background: var(--accent2); }
+  .direction-card:hover {
+    box-shadow: var(--shadow-lg); border-color: transparent;
+    transform: translateY(-2px);
+  }
+  .direction-card.cx2cl::before { background: linear-gradient(90deg, var(--accent), #ea580c); }
+  .direction-card.cl2cx::before { background: linear-gradient(90deg, var(--accent2), #0891b2); }
 
   .dir-label {
-    font-family: var(--mono); font-size: 0.65rem; font-weight: 500;
-    letter-spacing: 0.1em; text-transform: uppercase;
-    padding: 0.25rem 0.6rem; border-radius: 4px; display: inline-block; margin-bottom: 1rem;
+    font-family: var(--mono); font-size: 0.6rem; font-weight: 600;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    padding: 0.2rem 0.55rem; border-radius: var(--radius-xs);
+    display: inline-block; margin-bottom: 1.2rem;
   }
   .dir-label.codex-label { color: var(--accent); background: var(--accent-soft); }
   .dir-label.claude-label { color: var(--accent2); background: var(--accent2-soft); }
 
   .direction-card h3 {
-    font-family: var(--serif); font-size: 1.6rem; font-weight: 400; margin-bottom: 0.6rem;
+    font-family: var(--serif); font-size: 1.65rem; font-weight: 400;
+    margin-bottom: 0.65rem; letter-spacing: -0.01em;
   }
   .direction-card p {
-    font-size: 0.9rem; font-weight: 300; color: var(--fg-muted); line-height: 1.7; margin-bottom: 1.5rem;
+    font-size: 0.88rem; font-weight: 300; color: var(--fg-muted);
+    line-height: 1.75; margin-bottom: 1.5rem;
   }
-  .dir-commands {
-    display: flex; flex-direction: column; gap: 0.5rem;
-  }
+  .dir-commands { display: flex; flex-direction: column; gap: 0.5rem; }
   .dir-cmd {
-    font-family: var(--mono); font-size: 0.75rem; line-height: 1.7;
-    background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px;
-    padding: 0.5rem 0.8rem;
+    font-family: var(--mono); font-size: 0.72rem; line-height: 1.75;
+    background: var(--code-bg); border: 1px solid var(--border-light);
+    border-radius: var(--radius-xs); padding: 0.55rem 0.9rem;
   }
   .dir-cmd .comment { color: var(--fg-light); }
   .dir-cmd .cmd { font-weight: 500; }
 
   /* ─── section commons ─── */
   .section-label {
-    font-family: var(--mono); font-size: 0.68rem; font-weight: 500;
-    letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-light); margin-bottom: 1rem;
+    font-family: var(--mono); font-size: 0.65rem; font-weight: 500;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--fg-light); margin-bottom: 0.8rem;
+    display: flex; align-items: center; gap: 0.6rem;
+  }
+  .section-label::before {
+    content: ''; width: 12px; height: 1px; background: var(--fg-light);
   }
   .section-title {
-    font-family: var(--serif); font-size: clamp(2rem, 4vw, 3rem);
-    font-weight: 400; line-height: 1.15; letter-spacing: -0.02em; margin-bottom: 1rem;
+    font-family: var(--serif); font-size: clamp(2rem, 4.2vw, 3.2rem);
+    font-weight: 400; line-height: 1.12; letter-spacing: -0.025em; margin-bottom: 0.8rem;
   }
   .section-desc {
     font-size: 1rem; font-weight: 300; color: var(--fg-muted);
-    max-width: 540px; line-height: 1.7; margin-bottom: 3rem;
+    max-width: 520px; line-height: 1.75; margin-bottom: 3rem;
   }
 
   /* ─── features ─── */
-  .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+  .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
   .feature-card {
-    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
-    padding: 2rem; transition: all 0.3s ease; position: relative; overflow: hidden;
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 2rem 1.8rem; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative; overflow: hidden;
   }
-  .feature-card::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-    background: var(--fg); transform: scaleX(0); transform-origin: left; transition: transform 0.3s ease;
+  .feature-card::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 0;
+    background: var(--bg-deep); transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 0;
   }
-  .feature-card:hover::before { transform: scaleX(1); }
-  .feature-card:hover { box-shadow: 0 8px 30px rgba(0,0,0,0.06); border-color: transparent; }
-  .feature-icon { font-family: var(--mono); font-size: 1.5rem; margin-bottom: 1rem; display: block; }
-  .feature-card h3 { font-family: var(--sans); font-size: 0.92rem; font-weight: 600; margin-bottom: 0.5rem; }
-  .feature-card p { font-size: 0.85rem; font-weight: 300; color: var(--fg-muted); line-height: 1.65; }
+  .feature-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); border-color: transparent; }
+  .feature-card > * { position: relative; z-index: 1; }
+  .feature-icon {
+    font-family: var(--mono); font-size: 1.3rem; margin-bottom: 1rem; display: block;
+    color: var(--fg-light); transition: color var(--transition);
+  }
+  .feature-card:hover .feature-icon { color: var(--fg); }
+  .feature-card h3 {
+    font-family: var(--sans); font-size: 0.9rem; font-weight: 600;
+    margin-bottom: 0.5rem; letter-spacing: -0.01em;
+  }
+  .feature-card p {
+    font-size: 0.82rem; font-weight: 300; color: var(--fg-muted); line-height: 1.7;
+  }
   .feature-card code {
-    font-family: var(--mono); font-size: 0.8em; background: var(--code-bg);
-    padding: 0.1em 0.3em; border-radius: 3px; border: 1px solid var(--border);
+    font-family: var(--mono); font-size: 0.78em; background: var(--code-bg);
+    padding: 0.12em 0.35em; border-radius: 3px; border: 1px solid var(--border-light);
   }
 
   /* ─── how it works ─── */
   .how-section { border-top: 1px solid var(--border); }
   .steps { display: flex; flex-direction: column; }
   .step {
-    display: grid; grid-template-columns: 80px 1fr; gap: 2rem;
-    padding: 2.5rem 0; border-bottom: 1px solid var(--border); align-items: start;
-    opacity: 0; transform: translateY(20px); transition: all 0.5s ease;
+    display: grid; grid-template-columns: 72px 1fr; gap: 2rem;
+    padding: 2.8rem 0; border-bottom: 1px solid var(--border-light); align-items: start;
+    opacity: 0; transform: translateY(24px); transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .step.visible { opacity: 1; transform: translateY(0); }
   .step-number {
-    font-family: var(--serif); font-size: 3rem; font-weight: 400;
-    color: var(--border); line-height: 1; padding-top: 0.15rem;
+    font-family: var(--serif); font-size: 3.2rem; font-weight: 400;
+    color: var(--border); line-height: 1; padding-top: 0.1rem;
+    transition: color 0.4s;
   }
-  .step-content h3 { font-family: var(--sans); font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; }
+  .step:hover .step-number { color: var(--fg-light); }
+  .step-content h3 {
+    font-family: var(--sans); font-size: 1.08rem; font-weight: 600;
+    margin-bottom: 0.5rem; letter-spacing: -0.01em;
+  }
   .step-content p {
-    font-size: 0.92rem; font-weight: 300; color: var(--fg-muted);
-    line-height: 1.7; max-width: 540px; margin-bottom: 1rem;
+    font-size: 0.9rem; font-weight: 300; color: var(--fg-muted);
+    line-height: 1.75; max-width: 520px; margin-bottom: 1rem;
   }
   .step-code {
-    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-    padding: 1rem 1.25rem; font-family: var(--mono); font-size: 0.78rem; line-height: 1.8;
-    color: var(--fg); max-width: 580px; overflow-x: auto;
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 1rem 1.3rem; font-family: var(--mono); font-size: 0.76rem; line-height: 1.85;
+    color: var(--fg); max-width: 560px; overflow-x: auto;
+    box-shadow: var(--shadow-sm);
   }
   .step-code .comment { color: var(--fg-light); }
   .step-code .cmd { color: var(--accent); }
 
   /* ─── architecture ─── */
   .arch-diagram {
-    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
-    padding: 2.5rem; margin-top: 2rem; font-family: var(--mono); font-size: 0.72rem;
-    line-height: 1.9; color: var(--fg-muted); overflow-x: auto; white-space: pre; position: relative;
+    background: var(--fg); border-radius: var(--radius);
+    padding: 2.5rem; margin-top: 2rem; font-family: var(--mono); font-size: 0.7rem;
+    line-height: 2; color: rgba(255,255,255,0.45); overflow-x: auto; white-space: pre;
+    position: relative; box-shadow: var(--shadow-lg);
   }
-  .arch-diagram .hl { color: var(--accent); font-weight: 500; }
-  .arch-diagram .hl2 { color: var(--accent2); font-weight: 500; }
-  .arch-diagram .lb { color: var(--fg); }
+  .arch-diagram .hl { color: #fb923c; font-weight: 500; }
+  .arch-diagram .hl2 { color: #22d3ee; font-weight: 500; }
+  .arch-diagram .lb { color: rgba(255,255,255,0.8); }
+  .arch-diagram .dim { color: rgba(255,255,255,0.25); }
+
+  /* ─── format comparison ─── */
+  .format-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-top: 2rem; }
+  .format-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 2rem 1.8rem; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .format-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .format-card h4 {
+    font-family: var(--sans); font-size: 0.82rem; font-weight: 600;
+    margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.5rem;
+  }
+  .format-card h4 .dot-codex { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .format-card h4 .dot-claude { width: 8px; height: 8px; border-radius: 50%; background: var(--accent2); }
+  .format-card ul {
+    list-style: none; display: flex; flex-direction: column; gap: 0.45rem;
+  }
+  .format-card li {
+    font-size: 0.8rem; font-weight: 300; color: var(--fg-muted);
+    line-height: 1.6; display: flex; gap: 0.5rem;
+  }
+  .format-card li code {
+    font-family: var(--mono); font-size: 0.75em; background: var(--code-bg);
+    padding: 0.1em 0.3em; border-radius: 3px; border: 1px solid var(--border-light);
+  }
 
   /* ─── faq ─── */
   .faq-section { border-top: 1px solid var(--border); }
-  .faq-list { max-width: 680px; }
-  .faq-item { border-bottom: 1px solid var(--border); padding: 1.5rem 0; }
+  .faq-list { max-width: 660px; }
+  .faq-item { border-bottom: 1px solid var(--border-light); padding: 1.4rem 0; }
   .faq-item details summary {
-    font-size: 0.95rem; font-weight: 500; cursor: pointer; list-style: none;
-    display: flex; justify-content: space-between; align-items: center; user-select: none;
+    font-size: 0.92rem; font-weight: 500; cursor: pointer; list-style: none;
+    display: flex; justify-content: space-between; align-items: center;
+    user-select: none; letter-spacing: -0.01em;
+    transition: color var(--transition);
   }
+  .faq-item details summary:hover { color: var(--accent); }
   .faq-item details summary::-webkit-details-marker { display: none; }
   .faq-item details summary::after {
-    content: '+'; font-family: var(--mono); font-size: 1.2rem; color: var(--fg-light); transition: transform 0.2s;
+    content: '+'; font-family: var(--mono); font-size: 1.1rem; color: var(--fg-light);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0; margin-left: 1rem;
   }
   .faq-item details[open] summary::after { transform: rotate(45deg); }
   .faq-item details .faq-answer {
-    margin-top: 1rem; font-size: 0.88rem; font-weight: 300; color: var(--fg-muted); line-height: 1.7;
+    margin-top: 0.8rem; font-size: 0.86rem; font-weight: 300; color: var(--fg-muted); line-height: 1.75;
   }
   .faq-item details .faq-answer code {
-    font-family: var(--mono); font-size: 0.8em; background: var(--code-bg);
-    border: 1px solid var(--border); padding: 0.15rem 0.4rem; border-radius: 4px;
+    font-family: var(--mono); font-size: 0.78em; background: var(--code-bg);
+    border: 1px solid var(--border-light); padding: 0.12rem 0.4rem; border-radius: var(--radius-xs);
   }
 
   /* ─── footer ─── */
   footer { border-top: 1px solid var(--border); padding: 2.5rem 0; margin-top: 3rem; }
   .footer-inner {
-    max-width: 1100px; margin: 0 auto; padding: 0 2rem;
+    max-width: 1120px; margin: 0 auto; padding: 0 2rem;
     display: flex; justify-content: space-between; align-items: center;
   }
-  .footer-left { font-family: var(--mono); font-size: 0.72rem; color: var(--fg-light); letter-spacing: 0.04em; }
+  .footer-left {
+    font-family: var(--mono); font-size: 0.7rem; color: var(--fg-light);
+    letter-spacing: 0.04em; display: flex; align-items: center; gap: 1.5rem;
+  }
+  .footer-left a {
+    color: var(--fg-muted); text-decoration: none; transition: color var(--transition);
+    display: inline-flex; align-items: center; gap: 0.4rem;
+  }
+  .footer-left a:hover { color: var(--fg); }
+  .footer-left a svg { width: 14px; height: 14px; fill: currentColor; }
   .footer-right { display: flex; gap: 1.5rem; }
   .footer-right a {
-    font-family: var(--mono); font-size: 0.72rem; color: var(--fg-muted);
-    text-decoration: none; letter-spacing: 0.04em; transition: color 0.2s;
+    font-family: var(--mono); font-size: 0.7rem; color: var(--fg-light);
+    text-decoration: none; letter-spacing: 0.04em; transition: color var(--transition);
   }
   .footer-right a:hover { color: var(--fg); }
 
   /* ─── animations ─── */
-  @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-  @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.85); }
+  }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(5px); }
+  }
+  @keyframes bridgePulse {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.5); }
+  }
 
-  .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.7s ease, transform 0.7s ease; }
+  .reveal {
+    opacity: 0; transform: translateY(28px);
+    transition: opacity 0.7s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+  }
   .reveal.visible { opacity: 1; transform: translateY(0); }
+  .reveal:nth-child(2) { transition-delay: 0.1s; }
+  .reveal:nth-child(3) { transition-delay: 0.15s; }
+  .reveal:nth-child(4) { transition-delay: 0.2s; }
+  .reveal:nth-child(5) { transition-delay: 0.25s; }
+  .reveal:nth-child(6) { transition-delay: 0.3s; }
 
+  /* ─── responsive ─── */
   @media (max-width: 768px) {
-    .features-grid, .directions { grid-template-columns: 1fr; }
+    .features-grid, .directions, .format-grid { grid-template-columns: 1fr; }
     .nav-links { display: none; }
+    .hero { padding: 5rem 0 3rem; }
     .hero h1 { font-size: 2.2rem; }
-    .step { grid-template-columns: 1fr; }
+    .hero-cta-row { flex-direction: column; gap: 0.75rem; }
+    .quick-install-box code { font-size: 0.68rem; }
+    .step { grid-template-columns: 1fr; gap: 0.5rem; }
     .step-number { font-size: 2rem; }
+    section { padding: 3.5rem 0; }
+    .footer-inner { flex-direction: column; gap: 1rem; text-align: center; }
+    .footer-right { justify-content: center; }
   }
 </style>
 </head>
@@ -350,15 +552,16 @@
       sessionbridge
     </a>
     <ul class="nav-links">
-      <li><a href="#directions" class="active">Directions</a></li>
+      <li><a href="#directions">Directions</a></li>
       <li><a href="#features">Features</a></li>
       <li><a href="#how-it-works">How It Works</a></li>
       <li><a href="#architecture">Architecture</a></li>
       <li><a href="#faq">FAQ</a></li>
     </ul>
-    <div class="nav-actions">
-      <a href="https://github.com/tongtongtju/sessionbridge" target="_blank">GitHub</a>
-    </div>
+    <a href="https://github.com/tongtongtju/sessionbridge" target="_blank" class="nav-cta">
+      <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
   </div>
 </nav>
 
@@ -372,15 +575,31 @@
 
     <div class="hero-direction">
       <span class="tool codex">Codex CLI</span>
-      <span class="arrow">↔</span>
+      <span class="bridge"></span>
       <span class="tool claude">Claude Code</span>
     </div>
 
     <h1>Your sessions,<br><em>bridged</em></h1>
     <p class="hero-sub">
       Bidirectional session migration between OpenAI Codex CLI and Claude Code.
-      Preserve conversations, tool calls, and file changes — in either direction.
+      Conversations, tool calls, file changes — all preserved.
     </p>
+
+    <div class="hero-cta-row">
+      <a href="https://github.com/tongtongtju/sessionbridge" target="_blank" class="hero-cta-primary">
+        <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        View on GitHub
+      </a>
+      <a href="#directions" class="hero-cta-secondary">See how it works</a>
+    </div>
+
+    <div class="quick-install">
+      <div class="quick-install-label">Quick install</div>
+      <div class="quick-install-box">
+        <code><span class="dollar">$ </span><span class="cmd">git clone</span> <span class="url">https://github.com/tongtongtju/sessionbridge.git</span></code>
+        <button class="install-copy" onclick="copyInstall(this)">Copy</button>
+      </div>
+    </div>
 
     <div class="code-block-wrapper">
       <div class="code-tabs">
@@ -420,7 +639,7 @@
     </div>
 
     <div class="scroll-hint">
-      <span>$ scroll to explore</span>
+      <span>scroll to explore</span>
       <span class="arrow">↓</span>
     </div>
   </section>
@@ -428,7 +647,7 @@
   <!-- ─── directions ─── -->
   <section id="directions">
     <div class="reveal">
-      <p class="section-label">// Two directions</p>
+      <p class="section-label">Two directions</p>
       <h2 class="section-title">One plugin,<br>both ways</h2>
       <p class="section-desc">
         Whether you're moving from Codex to Claude Code or vice versa, sessionbridge handles the format conversion automatically.
@@ -470,7 +689,7 @@
   <!-- ─── features ─── -->
   <section id="features">
     <div class="reveal">
-      <p class="section-label">// Features</p>
+      <p class="section-label">Features</p>
       <h2 class="section-title">Built for<br>real workflows</h2>
     </div>
     <div class="features-grid">
@@ -510,7 +729,7 @@
   <!-- ─── how it works ─── -->
   <section id="how-it-works" class="how-section">
     <div class="reveal">
-      <p class="section-label">// How it works</p>
+      <p class="section-label">How it works</p>
       <h2 class="section-title">Three steps,<br>either direction</h2>
     </div>
     <div class="steps">
@@ -520,14 +739,14 @@
           <h3>Load the plugin</h3>
           <p>Start Claude Code in your project directory with the plugin loaded.</p>
           <div class="step-code"><span class="cmd">cd</span> /path/to/your-project
-<span class="cmd">claude</span> <span class="flag">--plugin-dir</span> /path/to/sessionbridge</div>
+<span class="cmd">claude</span> --plugin-dir /path/to/sessionbridge</div>
         </div>
       </div>
       <div class="step">
         <span class="step-number">02</span>
         <div class="step-content">
           <h3>Find your session</h3>
-          <p>List sessions from either tool. The plugin queries SQLite databases and scans filesystem.</p>
+          <p>List sessions from either tool. The plugin queries SQLite databases and scans the filesystem.</p>
           <div class="step-code"><span class="comment"># List Codex sessions</span>
 /sessionbridge:import-session <span class="cmd">cx2cl</span> --list
 
@@ -553,7 +772,7 @@
   <!-- ─── architecture ─── -->
   <section id="architecture">
     <div class="reveal">
-      <p class="section-label">// Architecture</p>
+      <p class="section-label">Architecture</p>
       <h2 class="section-title">Under the hood</h2>
       <p class="section-desc">
         How sessionbridge converts between two entirely different session formats — Codex's SQLite-indexed JSONL
@@ -561,45 +780,46 @@
       </p>
     </div>
     <div class="arch-diagram reveal">
-<span class="hl">┌────────────────────────────────────────────────────────────────────────────┐</span>
-<span class="hl">│</span>                          <span class="lb">sessionbridge</span>                                 <span class="hl">│</span>
-<span class="hl">│</span>                                                                            <span class="hl">│</span>
-<span class="hl">│</span>  <span class="lb">Direction 1: cx2cl (Codex → Claude)</span>                                       <span class="hl">│</span>
-<span class="hl">│</span>                                                                            <span class="hl">│</span>
-<span class="hl">│</span>   <span class="hl">codex-parser</span> ──parse──→ <span class="lb">ParsedSession</span> ──write──→ <span class="hl2">claude-writer</span>             <span class="hl">│</span>
-<span class="hl">│</span>       │                       (IR)                      │                  <span class="hl">│</span>
-<span class="hl">│</span>       ▼                                                 ▼                  <span class="hl">│</span>
-<span class="hl">│</span>   Codex JSONL           context-builder         Claude JSONL               <span class="hl">│</span>
-<span class="hl">│</span>                          (inject mode)          + DAG chains              <span class="hl">│</span>
-<span class="hl">│</span>                                                                            <span class="hl">│</span>
-<span class="hl">│</span>  <span class="hl2">Direction 2: cl2cx (Claude → Codex)</span>                                      <span class="hl">│</span>
-<span class="hl">│</span>                                                                            <span class="hl">│</span>
-<span class="hl">│</span>   <span class="hl2">claude-reader</span> ──parse──→ <span class="lb">ParsedSession</span> ──write──→ <span class="hl">codex-writer</span>             <span class="hl">│</span>
-<span class="hl">│</span>       │                       (IR)                      │                  <span class="hl">│</span>
-<span class="hl">│</span>       ▼                                                 ▼                  <span class="hl">│</span>
-<span class="hl">│</span>   Claude JSONL          context-builder         Codex JSONL               <span class="hl">│</span>
-<span class="hl">│</span>   + tool_use pairs       (--inject)             + SQLite index            <span class="hl">│</span>
-<span class="hl">└────────────────────────────────────────────────────────────────────────────┘</span>
-    </div>
+<span class="dim">┌──────────────────────────────────────────────────────────────────────────────┐</span>
+<span class="dim">│</span>                              <span class="lb">sessionbridge</span>                               <span class="dim">│</span>
+<span class="dim">│</span>                                                                              <span class="dim">│</span>
+<span class="dim">│</span>   <span class="hl">Direction 1: cx2cl (Codex → Claude)</span>                                       <span class="dim">│</span>
+<span class="dim">│</span>                                                                              <span class="dim">│</span>
+<span class="dim">│</span>    <span class="hl">codex-parser</span> ──parse──→ <span class="lb">ParsedSession</span> ──write──→ <span class="hl2">claude-writer</span>               <span class="dim">│</span>
+<span class="dim">│</span>        │                         (IR)                     │                 <span class="dim">│</span>
+<span class="dim">│</span>        ▼                                                   ▼                 <span class="dim">│</span>
+<span class="dim">│</span>    Codex JSONL           context-builder            Claude JSONL               <span class="dim">│</span>
+<span class="dim">│</span>                           (inject mode)             + DAG chains              <span class="dim">│</span>
+<span class="dim">│</span>                                                                              <span class="dim">│</span>
+<span class="dim">│</span>   <span class="hl2">Direction 2: cl2cx (Claude → Codex)</span>                                      <span class="dim">│</span>
+<span class="dim">│</span>                                                                              <span class="dim">│</span>
+<span class="dim">│</span>    <span class="hl2">claude-reader</span> ──parse──→ <span class="lb">ParsedSession</span> ──write──→ <span class="hl">codex-writer</span>               <span class="dim">│</span>
+<span class="dim">│</span>        │                         (IR)                     │                 <span class="dim">│</span>
+<span class="dim">│</span>        ▼                                                   ▼                 <span class="dim">│</span>
+<span class="dim">│</span>    Claude JSONL          context-builder            Codex JSONL               <span class="dim">│</span>
+<span class="dim">│</span>    + tool_use pairs        (--inject)              + SQLite index            <span class="dim">│</span>
+<span class="dim">└──────────────────────────────────────────────────────────────────────────────┘</span></div>
 
-    <div class="features-grid reveal" style="margin-top:2rem; grid-template-columns: repeat(2, 1fr);">
-      <div class="feature-card">
-        <span class="feature-icon" style="color:var(--accent)">⊞</span>
-        <h3>Codex Format</h3>
-        <p>
-          JSONL indexed by SQLite. Records: <code>session_meta</code>, <code>turn_context</code>,
-          <code>event_msg</code>, <code>response_item</code>. UUID v7 session IDs.
-          Tools: <code>exec_command</code>, <code>apply_patch</code>.
-        </p>
+    <div class="format-grid reveal">
+      <div class="format-card">
+        <h4><span class="dot-codex"></span> Codex Format</h4>
+        <ul>
+          <li><code>~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl</code></li>
+          <li>Indexed by <code>state_5.sqlite</code> threads table</li>
+          <li>Records: <code>session_meta</code>, <code>turn_context</code>, <code>event_msg</code>, <code>response_item</code></li>
+          <li>UUID v7 session IDs (time-ordered)</li>
+          <li>Tools: <code>exec_command</code>, <code>apply_patch</code>, <code>read_file</code></li>
+        </ul>
       </div>
-      <div class="feature-card">
-        <span class="feature-icon" style="color:var(--accent2)">⊡</span>
-        <h3>Claude Code Format</h3>
-        <p>
-          JSONL with DAG-linked records (<code>uuid</code> + <code>parentUuid</code>). Types:
-          <code>user</code>, <code>assistant</code>, <code>tool_result</code>. UUID v4 session IDs.
-          Tools: <code>Bash</code>, <code>Edit</code>, <code>Read</code>.
-        </p>
+      <div class="format-card">
+        <h4><span class="dot-claude"></span> Claude Code Format</h4>
+        <ul>
+          <li><code>~/.claude/projects/&lt;slug&gt;/&lt;uuid&gt;.jsonl</code></li>
+          <li>Pure file-based, no SQLite index</li>
+          <li>DAG-linked records via <code>uuid</code> + <code>parentUuid</code></li>
+          <li>UUID v4 session IDs (random)</li>
+          <li>Tools: <code>Bash</code>, <code>Edit</code>, <code>Read</code>, <code>Write</code></li>
+        </ul>
       </div>
     </div>
   </section>
@@ -607,7 +827,7 @@
   <!-- ─── faq ─── -->
   <section id="faq" class="faq-section">
     <div class="reveal">
-      <p class="section-label">// FAQ</p>
+      <p class="section-label">FAQ</p>
       <h2 class="section-title">Common questions</h2>
     </div>
     <div class="faq-list reveal">
@@ -620,7 +840,7 @@
       </details></div>
       <div class="faq-item"><details>
         <summary>Will it modify my original sessions?</summary>
-        <div class="faq-answer">No. All operations are strictly read-only on source data. Converted files are written to the target directory.</div>
+        <div class="faq-answer">No. All operations are strictly read-only on source data. Converted files are written to the target directory only.</div>
       </details></div>
       <div class="faq-item"><details>
         <summary>What data is preserved vs. lost?</summary>
@@ -647,16 +867,23 @@
 <!-- ─── footer ─── -->
 <footer>
   <div class="footer-inner">
-    <div class="footer-left">sessionbridge v1.0.0 — MIT License</div>
+    <div class="footer-left">
+      <span>sessionbridge v1.0.0 — MIT</span>
+      <a href="https://github.com/tongtongtju/sessionbridge" target="_blank">
+        <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        tongtongtju/sessionbridge
+      </a>
+    </div>
     <div class="footer-right">
-      <a href="https://github.com/tongtongtju/sessionbridge">GitHub</a>
       <a href="#directions">Directions</a>
       <a href="#architecture">Architecture</a>
+      <a href="#faq">FAQ</a>
     </div>
   </div>
 </footer>
 
 <script>
+// Tab switching
 function switchTab(btn, id) {
   const w = btn.closest('.code-block-wrapper');
   w.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
@@ -664,18 +891,46 @@ function switchTab(btn, id) {
   w.querySelectorAll('code[id^="tab-"]').forEach(c => c.style.display = 'none');
   document.getElementById(id).style.display = 'block';
 }
+
+// Copy code blocks
 function copyCode(btn) {
   const b = btn.closest('.code-block');
   const v = b.querySelector('code[id^="tab-"]:not([style*="display: none"])') || b.querySelector('code[id^="tab-"]');
-  navigator.clipboard.writeText(v.textContent).then(() => { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 1500); });
+  navigator.clipboard.writeText(v.textContent).then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1500);
+  });
 }
-const obs = new IntersectionObserver(e => e.forEach(el => { if (el.isIntersecting) el.target.classList.add('visible'); }), { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+
+// Copy install command
+function copyInstall(btn) {
+  const code = btn.closest('.quick-install-box').querySelector('code');
+  navigator.clipboard.writeText(code.textContent.trim().replace(/^\$\s*/, '')).then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1500);
+  });
+}
+
+// Scroll-triggered reveals
+const obs = new IntersectionObserver(
+  entries => entries.forEach(el => { if (el.isIntersecting) { el.target.classList.add('visible'); obs.unobserve(el.target); } }),
+  { threshold: 0.12, rootMargin: '0px 0px -30px 0px' }
+);
 document.querySelectorAll('.reveal, .step').forEach(el => obs.observe(el));
+
+// Active nav link
 const secs = document.querySelectorAll('section[id]');
+const navEl = document.querySelector('nav');
 window.addEventListener('scroll', () => {
-  let c = ''; secs.forEach(s => { if (scrollY >= s.offsetTop - 200) c = s.id; });
-  document.querySelectorAll('.nav-links a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + c));
-});
+  // Nav shadow on scroll
+  navEl.classList.toggle('scrolled', window.scrollY > 10);
+  // Active section
+  let current = '';
+  secs.forEach(s => { if (scrollY >= s.offsetTop - 200) current = s.id; });
+  document.querySelectorAll('.nav-links a').forEach(a => {
+    a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+  });
+}, { passive: true });
 </script>
 </body>
 </html>
