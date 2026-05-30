@@ -3,5 +3,7 @@
   "description": "Bidirectional session migration between OpenAI Codex CLI and Claude Code",
   "version": "1.0.0",
   "author": { "name": "songyuntong1" },
-  "license": "MIT"
+  "license": "MIT",
+  "keywords": ["codex", "claude-code", "session", "migration"],
+  "skills": ["./skills/import-session"]
 }
