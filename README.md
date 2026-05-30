@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/readme-banner.png" alt="sessionbridge" width="100%">
+</p>
+
 <h1 align="center">sessionbridge</h1>
 
 <p align="center">
@@ -5,7 +9,23 @@
 </p>
 
 <p align="center">
-  <a href="#安装">安装</a> · <a href="#快速开始">快速开始</a> · <a href="#命令参考">命令参考</a> · <a href="#工作原理">工作原理</a> · <a href="#项目结构">项目结构</a>
+  <a href="https://tongtongtju.github.io/sessionbridge/" target="_blank">
+    <img src="https://img.shields.io/badge/website-tongtongtju.github.io%2Fsessionbridge-1a1917?style=flat-square" alt="Website">
+  </a>
+  <a href="https://github.com/tongtongtju/sessionbridge/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-1a1917?style=flat-square" alt="License">
+  </a>
+  <img src="https://img.shields.io/badge/node-%3E%3D18-1a1917?style=flat-square" alt="Node.js">
+  <img src="https://img.shields.io/badge/type-Claude%20Code%20Plugin-1a1917?style=flat-square" alt="Type">
+</p>
+
+<p align="center">
+  <a href="https://tongtongtju.github.io/sessionbridge/">官方网站</a> ·
+  <a href="#安装">安装</a> ·
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#命令参考">命令参考</a> ·
+  <a href="#工作原理">工作原理</a> ·
+  <a href="#项目结构">项目结构</a>
 </p>
 
 ---
