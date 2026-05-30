@@ -594,47 +594,45 @@
     </div>
 
     <div class="quick-install">
-      <div class="quick-install-label">Quick install</div>
+      <div class="quick-install-label">Install via Claude Code Plugin Marketplace</div>
       <div class="quick-install-box">
-        <code><span class="dollar">$ </span><span class="cmd">git clone</span> <span class="url">https://github.com/tongtongtju/sessionbridge.git</span></code>
+        <code><span class="cmd">/plugin marketplace add</span> tongtongtju/sessionbridge
+<span class="cmd">/plugin install</span> sessionbridge@sessionbridge</code>
         <button class="install-copy" onclick="copyInstall(this)">Copy</button>
       </div>
     </div>
 
     <div class="code-block-wrapper">
       <div class="code-tabs">
-        <button class="code-tab active" onclick="switchTab(this, 'tab-install')">Install</button>
-        <button class="code-tab" onclick="switchTab(this, 'tab-cx2cl')">Codex → Claude</button>
+        <button class="code-tab active" onclick="switchTab(this, 'tab-cx2cl')">Codex → Claude</button>
         <button class="code-tab" onclick="switchTab(this, 'tab-cl2cx')">Claude → Codex</button>
+        <button class="code-tab" onclick="switchTab(this, 'tab-manual')">Manual Install</button>
       </div>
       <div class="code-block">
         <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-        <code id="tab-install"><span class="cmd">git</span> clone https://github.com/tongtongtju/sessionbridge.git
+        <code id="tab-cx2cl"><span class="comment"># List available Codex sessions</span>
+/sessionbridge:import-session <span class="cmd">cx2cl</span> --list
+
+<span class="comment"># Inject context into current session (default)</span>
+/sessionbridge:import-session <span class="cmd">cx2cl</span> <span class="flag">&lt;session-id&gt;</span>
+
+<span class="comment"># Create new Claude session file</span>
+/sessionbridge:import-session <span class="cmd">cx2cl</span> <span class="flag">&lt;session-id&gt;</span> --new-session</code>
+        <code id="tab-cl2cx" style="display:none"><span class="comment"># List available Claude sessions</span>
+/sessionbridge:import-session <span class="cmd">cl2cx</span> --list
+
+<span class="comment"># Create new Codex session file (default)</span>
+/sessionbridge:import-session <span class="cmd">cl2cx</span> <span class="flag">&lt;session-id&gt;</span>
+
+<span class="comment"># Inject context into current conversation</span>
+/sessionbridge:import-session <span class="cmd">cl2cx</span> <span class="flag">&lt;session-id&gt;</span> --inject</code>
+        <code id="tab-manual" style="display:none"><span class="comment"># Clone and install manually</span>
+<span class="cmd">git</span> clone https://github.com/tongtongtju/sessionbridge.git
 <span class="cmd">cd</span> sessionbridge <span class="flag">&&</span> <span class="cmd">npm</span> install
 
 <span class="comment"># Load plugin in your project</span>
 <span class="cmd">cd</span> /your/project
 <span class="cmd">claude</span> <span class="flag">--plugin-dir</span> /path/to/sessionbridge</code>
-        <code id="tab-cx2cl" style="display:none"><span class="comment"># Codex → Claude Code</span>
-
-<span class="comment"># List available Codex sessions</span>
-/sessionbridge:import-session <span class="cmd">cx2cl</span> --list
-
-<span class="comment"># Inject context into current session (default)</span>
-/sessionbridge:import-session <span class="cmd">cx2cl</span> <span class="flag">&lt;codex-session-id&gt;</span>
-
-<span class="comment"># Create new Claude session file</span>
-/sessionbridge:import-session <span class="cmd">cx2cl</span> <span class="flag">&lt;codex-session-id&gt;</span> --new-session</code>
-        <code id="tab-cl2cx" style="display:none"><span class="comment"># Claude Code → Codex</span>
-
-<span class="comment"># List available Claude sessions</span>
-/sessionbridge:import-session <span class="cmd">cl2cx</span> --list
-
-<span class="comment"># Create new Codex session file (default)</span>
-/sessionbridge:import-session <span class="cmd">cl2cx</span> <span class="flag">&lt;claude-session-id&gt;</span>
-
-<span class="comment"># Inject context into current conversation</span>
-/sessionbridge:import-session <span class="cmd">cl2cx</span> <span class="flag">&lt;claude-session-id&gt;</span> --inject</code>
       </div>
     </div>
 
@@ -736,10 +734,10 @@
       <div class="step">
         <span class="step-number">01</span>
         <div class="step-content">
-          <h3>Load the plugin</h3>
-          <p>Start Claude Code in your project directory with the plugin loaded.</p>
-          <div class="step-code"><span class="cmd">cd</span> /path/to/your-project
-<span class="cmd">claude</span> --plugin-dir /path/to/sessionbridge</div>
+          <h3>Install the plugin</h3>
+          <p>Run two commands in Claude Code to install from the plugin marketplace.</p>
+          <div class="step-code"><span class="cmd">/plugin marketplace add</span> tongtongtju/sessionbridge
+<span class="cmd">/plugin install</span> sessionbridge@sessionbridge</div>
         </div>
       </div>
       <div class="step">
